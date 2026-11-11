@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Recovery from Fatigue</title>
+  <style>
+    :root{
+      --bg:#0f172a; --panel:#111827ee; --text:#e5e7eb; --muted:#94a3b8;
+      --accent:#38bdf8; --border:#1f2937; --code:#0b1220; --warn:#fbbf24; --err:#f87171;
+    }
+    html,body{height:100%}
+    body{
+      margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      line-height:1.7; background:linear-gradient(180deg, #0b1220 0%, #0f172a 100%); color:var(--text);
+    }
+    .wrap{max-width:980px; margin:0 auto; padding:32px 16px 80px}
+    header{position:sticky; top:0; z-index:5; backdrop-filter: blur(8px); background: linear-gradient(to bottom, rgba(15,23,42,.92), rgba(15,23,42,.7)); border-bottom:1px solid var(--border)}
+    header .inner{max-width:980px; margin:0 auto; padding:12px 16px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center}
+    h1{font-size: clamp(22px, 4vw, 32px); margin:0; letter-spacing:.02em}
+    nav{margin-left:auto; display:flex; flex-wrap:wrap; gap:4px 14px}
+    nav a{color:var(--muted); text-decoration:none; font-size:14px}
+    nav a:hover{color:var(--text)}
+    section{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px 22px; margin:20px 0}
+    h2{font-size: clamp(18px, 3vw, 22px); margin:0 0 10px}
+    h3{font-size:17px; margin:20px 0 6px; color:var(--accent)}
+    p{margin:10px 0}
+    ul{margin:8px 0 8px 1.2em; padding-left:.4em}
+    li{margin:4px 0}
+    code, pre, textarea{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    code{background:#0b1220; padding:1px 5px; border-radius:6px; font-size:.92em}
+    pre{background:var(--code); border:1px solid var(--border); border-radius:12px; padding:14px; overflow:auto; font-size:14px}
+    pre code{background:none; padding:0}
+    .muted{color:var(--muted)}
+    .note{border-left:3px solid var(--warn); padding:4px 12px; color:#fde68a; background:#fbbf2410; border-radius:0 8px 8px 0}
+    .formula{font-size:1.08em; text-align:center; padding:10px; background:var(--code); border-radius:10px; border:1px solid var(--border); overflow-x:auto}
+    .badge{display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted)}
+    .grid-2{display:grid; grid-template-columns:minmax(0,1fr); gap:14px}
+    .grid-2 > *{min-width:0}
+    @media (min-width:820px){ .grid-2{ grid-template-columns: 1fr 1fr } }
+    table{border-collapse:collapse; width:100%; font-size:14px}
+    th,td{border:1px solid var(--border); padding:6px 10px; text-align:left}
+    th{background:#0b1220; color:var(--muted); font-weight:600}
+    textarea{width:100%; box-sizing:border-box; height:150px; background:#0b1220; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px; font-size:12px}
+    button, input[type=number]{background:#101826; color:var(--text); border:1px solid #2b3445; padding:6px 12px; border-radius:10px; font-size:13px}
+    button{cursor:pointer} button:hover{border-color:var(--accent)}
+    input[type=number]{width:90px}
+    .row{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0}
+    input[type=range]{flex:1; min-width:160px; accent-color:var(--accent)}
+    canvas{display:block; width:100%; max-width:720px; height:auto; border:1px solid var(--border); border-radius:10px; background:#0b1220; margin:0 auto}
+    #status{font-family:ui-monospace,monospace; font-size:13px; white-space:pre-wrap}
+    .err{color:var(--err)}
+    .legend{display:flex; flex-wrap:wrap; gap:6px 16px; font-size:13px; color:var(--muted); margin:8px 0}
+    .legend span::before{content:""; display:inline-block; width:10px; height:10px; margin-right:6px; vertical-align:-1px; border-radius:50%; background:var(--c)}
+    .legend span.sq::before{border-radius:2px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Recovery from Fatigue</h1>
+      <nav>
+        <a href="#problem">問題文</a>
+        <a href="#score">得点</a>
+        <a href="#io">入出力</a>
+        <a href="#gen">入力生成</a>
+        <a href="#tools">ツール</a>
+        <a href="#visualizer">ビジュアライザ</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+
+    <section id="problem">
+      <h2>問題文</h2>
+      <p>ランナーが <strong>街1</strong> を出発してすべての街を巡り、<strong>街1</strong> に戻る計画を立てています。
+        途中には湖などの <strong>侵入不可エリア</strong> が広がっており、走るほど疲れがたまっていきます。
+        あなたは <strong>給水機の設置位置</strong> と <strong>走る経路</strong> を決め、ランナーができるだけ短い時間で巡回を終えられるようにしてください。</p>
+
+      <h3>盤面</h3>
+      <ul>
+        <li>盤面は <code>0 ≤ x ≤ N</code>, <code>0 ≤ y ≤ N</code> の正方形の平面です（<code>N = 1000</code>）。</li>
+        <li>街が <code>S</code> 個あり、街 <code>k</code> の位置は整数座標 <code>(X<sub>k</sub>, Y<sub>k</sub>)</code> です。</li>
+        <li><strong>既設の給水所</strong> が <code>W</code> 個あり、給水所 <code>i</code> の位置は整数座標 <code>(P<sub>i</sub>, Q<sub>i</sub>)</code> です。</li>
+        <li><strong>侵入不可エリア</strong> が <code>K</code> 個あり、エリア <code>j</code> は中心 <code>(Cx<sub>j</sub>, Cy<sub>j</sub>)</code>、半径 <code>R<sub>j</sub></code> の円の<strong>内部</strong>（中心からの距離が <code>R<sub>j</sub></code> 未満の部分）です。
+          円周上は侵入不可エリアに含まれません。円同士は重なっていることがあり、盤面からはみ出していることもあります。</li>
+      </ul>
+
+      <h3>給水機の設置</h3>
+      <ul>
+        <li>移動を始める前に、新しい給水機を <code>M</code> 個まで設置できます。</li>
+        <li>給水機は盤面内の整数座標に置き、侵入不可エリアの内部には置けません。街や既設の給水所と同じ位置に置いても構いません。</li>
+        <li>同じ位置に複数の給水機を置くこともできますが、それぞれ 1 個として数えます。</li>
+        <li>街1 は、給水機を置かない限り給水所ではありません。</li>
+      </ul>
+
+      <h3>移動</h3>
+      <ul>
+        <li>経路は整数座標の点列 <code>p<sub>0</sub>, p<sub>1</sub>, …, p<sub>T</sub></code> で表します。<code>p<sub>0</sub></code> は街1の位置で、ランナーは <code>p<sub>t-1</sub></code> から <code>p<sub>t</sub></code> へ<strong>線分に沿って直線移動</strong>します。</li>
+        <li>すべての点は盤面内になければならず、各線分は侵入不可エリアの内部を通ってはいけません（円周に接するのは構いません）。</li>
+        <li><code>0 ≤ T ≤ 10<sup>5</sup></code> で、最後の点 <code>p<sub>T</sub></code> は街1の位置でなければなりません（<code>T = 0</code> のときは <code>p<sub>0</sub></code> が最後の点です）。</li>
+        <li>点 <code>p<sub>t</sub></code>（<code>t ≥ 0</code>）と同じ位置にある街は訪問済みになります。出発時点で街1は訪問済みです。線分の途中で街の上を通過しても訪問にはなりません。</li>
+        <li>同じ点（街・給水所を含む）を何度通っても構いません。<code>p<sub>t-1</sub> = p<sub>t</sub></code> となる長さ 0 の移動も可能です（時間はかかりませんが、その点が給水所なら給水されます）。</li>
+      </ul>
+
+      <h3>疲労度と時間</h3>
+      <ul>
+        <li>最後に給水してから走った距離を <code>s</code> とすると、ランナーの<strong>疲労度</strong>は <code>V + F·s</code> です。出発時は <code>s = 0</code> です。</li>
+        <li>疲労度 <code>x</code> のとき、微小距離 <code>ds</code> を走るのに <code>x·ds</code> の時間がかかります。したがって、<code>s = s<sub>0</sub></code> の状態から距離 <code>d</code> の線分を走るのにかかる時間は次のとおりです。
+          <div class="formula">V·d + F·(2·s<sub>0</sub>·d + d<sup>2</sup>) / 2</div>
+        </li>
+        <li>点 <code>p<sub>t</sub></code> が既設の給水所またはあなたが設置した給水機と同じ位置のとき、そこで給水して <code>s = 0</code> に戻ります。<strong>線分の途中で通過しても給水はされません。</strong></li>
+        <li>距離はユークリッド距離です。</li>
+      </ul>
+      <p class="note">給水せずに長い距離 <code>L</code> を走ると、かかる時間は <code>V·L + F·L²/2</code> と距離の2乗で増えます。
+        給水所と給水機をどう使うかが鍵になります。</p>
+    </section>
+
+    <section id="score">
+      <h2>得点</h2>
+      <p>総移動時間を <code>Time</code>、訪問しなかった街の数を <code>U</code> として、次の値が得点になります。<strong>得点は小さいほど良い</strong>です。</p>
+      <div class="formula">round(Time) + 10<sup>9</sup> × U</div>
+      <p class="muted"><code>Time</code> は各移動の時間を倍精度浮動小数点数で先頭から順に足した値で、最後に四捨五入します。</p>
+      <p>次のいずれかに当てはまる出力は不正（WA）です。</p>
+      <ul>
+        <li>出力の形式が正しくない（トークンが足りない、末尾に余分なトークンがある、整数でないトークンがある）</li>
+        <li>給水機が <code>M</code> 個より多い、盤面外にある、または侵入不可エリアの内部にある</li>
+        <li><code>T</code> が <code>0 ≤ T ≤ 10<sup>5</sup></code> を満たさない、または経路の点が盤面外にある</li>
+        <li>いずれかの線分が侵入不可エリアの内部を通る</li>
+        <li>最後の点が街1ではない</li>
+      </ul>
+      <p>整数は <code>-</code> の有無と数字だけで書いてください（<code>+5</code> や <code>5.0</code> は整数として扱いません）。トークンは空白・改行で区切ります。</p>
+
+      <h3>テストケースと総得点</h3>
+      <ul>
+        <li>テストケースは 100 個で、<code>tools/seeds.txt</code> の seed 0〜99 から生成します（<code>tools/in/0000.txt</code> 〜 <code>0099.txt</code>）。</li>
+        <li>総得点は各テストケースの得点の合計です。<strong>WA のテストケースが 1 つでもあれば、提出全体を WA とします。</strong></li>
+        <li>実行時間制限は 1 ケースあたり <strong>3 秒</strong>、メモリ制限は <strong>1024 MiB</strong> です。</li>
+      </ul>
+    </section>
+
+    <section id="io">
+      <h2>入力</h2>
+      <pre><code>N S W K M V F
+X[1] Y[1]
+...
+X[S] Y[S]
+P[1] Q[1]
+...
+P[W] Q[W]
+Cx[1] Cy[1] R[1]
+...
+Cx[K] Cy[K] R[K]</code></pre>
+      <table>
+        <tr><th>記号</th><th>意味</th><th>範囲</th></tr>
+        <tr><td><code>N</code></td><td>盤面の大きさ</td><td><code>N = 1000</code></td></tr>
+        <tr><td><code>S</code></td><td>街の数</td><td><code>100 ≤ S ≤ 400</code></td></tr>
+        <tr><td><code>W</code></td><td>既設の給水所の数</td><td><code>0 ≤ W ≤ 4</code></td></tr>
+        <tr><td><code>K</code></td><td>侵入不可エリアの数</td><td><code>0 ≤ K ≤ 40</code></td></tr>
+        <tr><td><code>M</code></td><td>設置できる給水機の最大数</td><td><code>1 ≤ M ≤ 4</code></td></tr>
+        <tr><td><code>V</code></td><td>給水直後の疲労度</td><td><code>V = 1000</code></td></tr>
+        <tr><td><code>F</code></td><td>距離あたりの疲労度の増加量</td><td><code>1 ≤ F ≤ 10</code></td></tr>
+        <tr><td><code>R</code></td><td>侵入不可エリアの半径</td><td><code>20 ≤ R ≤ 150</code>、中心は盤面内</td></tr>
+      </table>
+      <ul>
+        <li>入力はすべて整数です。<code>0 ≤ X[k], Y[k], P[i], Q[i], Cx[j], Cy[j] ≤ N</code> です。</li>
+        <li>街と既設の給水所の位置はすべて互いに異なり、侵入不可エリアの内部にはありません。</li>
+        <li>すべての街と給水所は、侵入不可エリアを通らずに互いに行き来できます。</li>
+      </ul>
+
+      <h2 style="margin-top:22px">出力</h2>
+      <p>設置する給水機の数を <code>L</code>（<code>0 ≤ L ≤ M</code>）、給水機 <code>l</code> の位置を <code>(A[l], B[l])</code>、
+        経路の点列を <code>p<sub>1</sub> = (x[1], y[1]), …, p<sub>T</sub> = (x[T], y[T])</code> として、次の形式で出力してください。<code>p<sub>0</sub></code>（街1）は出力しません。</p>
+      <pre><code>L
+A[1] B[1]
+...
+A[L] B[L]
+T
+x[1] y[1]
+...
+x[T] y[T]</code></pre>
+
+      <h2 style="margin-top:22px">入出力例</h2>
+      <p>実際のテストケースは <code>tools/in/</code> にあります。以下は形式を説明するための小さな例で、制約は満たしていません。</p>
+      <div class="grid-2">
+        <div>
+          <p class="badge">入力例</p>
+          <pre><code>1000 3 1 1 1 1000 5
+100 100
+900 100
+500 900
+500 500
+500 300 100
+</code></pre>
+        </div>
+        <div>
+          <p class="badge">出力例</p>
+          <pre><code>1
+900 100
+5
+500 500
+900 100
+500 900
+500 500
+100 100
+</code></pre>
+        </div>
+      </div>
+      <p class="muted">街1 (100,100) → 既設の給水所 (500,500) → 給水機を置いた街2 (900,100) → 街3 (500,900) → 給水所 (500,500) → 街1 と移動します。
+        どの線分も中心 (500,300)・半径 100 の円の内部を通りません。</p>
+    </section>
+
+    <section id="gen">
+      <h2>入力生成方法</h2>
+      <p class="muted"><code>rand(a, b)</code> は <code>a</code> 以上 <code>b</code> 以下の一様な整数、<code>rand01()</code> は [0, 1) の一様な実数です。</p>
+      <div class="grid-2">
+        <div>
+          <ul>
+            <li><code>N = 1000</code>, <code>V = 1000</code></li>
+            <li><code>F = rand(1, 10)</code></li>
+            <li><code>S = rand(100, 400)</code></li>
+            <li><code>W = rand(0, 4)</code></li>
+            <li><code>M = rand(1, 4)</code></li>
+            <li><code>K = rand(0, 40)</code></li>
+          </ul>
+          <p><strong>侵入不可エリア</strong>：確率 0.6 で既存の円に寄り添うように（半径 <code>rand(20,100)</code>、中心間距離が半径の和の 0.5〜1.0 倍）、
+            それ以外は盤面内の一様な位置に（半径 <code>rand(20,150)</code>）円を置きます。こうしてできる「連なった湖」が迂回を強制します。</p>
+          <p>格子点の連結成分を調べ、侵入不可エリアに阻まれない最大の領域が盤面の半分未満なら作り直します。</p>
+        </div>
+        <div>
+          <p><strong>街</strong>：<code>0〜8</code> 個のクラスタ中心を作り、一部の街はクラスタの周りに正規分布で、残りは一様に置きます。</p>
+          <p><strong>既設の給水所</strong>：一様に置きます。</p>
+          <p class="badge">擬似コード</p>
+          <pre><code>C = rand(0, 8) 個のクラスタ (中心, σ = rand(20, 80))
+ratio = (C == 0) ? 0 : rand01() * 0.8
+while 街が S 個未満:
+  if rand01() &lt; ratio: p = ランダムなクラスタの周りの正規分布
+  else:                p = 一様な格子点
+  if p が最大の連結領域内 かつ 未使用: 採用</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="tools">
+      <h2>ローカルツール</h2>
+      <p><code>tools/</code> は Rust 製で、外部クレートは使いません。</p>
+      <pre><code># 入力生成（seeds.txt の各行のシードから in/0000.txt ... を作る）
+cd tools
+cargo run --release --bin gen seeds.txt in
+
+# 得点計算
+cargo run --release --bin score in/0000.txt ../out/0000.txt</code></pre>
+      <p><code>solver/</code> にサンプル解法があります。可視グラフで障害物を避けた最短路を求め、2-opt と Or-opt で巡回順を改善し、給水機を経路上に等間隔に置きます。</p>
+    </section>
+
+    <section id="visualizer">
+      <h2>ビジュアライザ</h2>
+      <div class="row">
+        <label>seed <input type="number" id="seed" value="0" min="0"></label>
+        <button id="genBtn">入力を生成</button>
+        <span class="muted" style="font-size:12px">（ローカルツールの <code>gen</code> と同じ入力になります）</span>
+      </div>
+      <div class="grid-2">
+        <div><p style="margin:4px 0">入力</p><textarea id="inputArea" spellcheck="false"></textarea></div>
+        <div><p style="margin:4px 0">出力</p><textarea id="outputArea" spellcheck="false"></textarea></div>
+      </div>
+      <div class="row">
+        <button id="drawBtn">描画</button>
+        <button id="playBtn">▶ 再生</button>
+        <input type="range" id="slider" min="0" max="0" value="0">
+        <span id="stepLabel" class="muted" style="font-family:monospace">0 / 0</span>
+      </div>
+      <div class="legend">
+        <span style="--c:#60a5fa">街1</span>
+        <span style="--c:#f87171">未訪問の街</span>
+        <span style="--c:#4ade80">訪問済みの街</span>
+        <span class="sq" style="--c:#22d3ee">既設の給水所</span>
+        <span style="--c:#f0abfc">設置した給水機</span>
+        <span style="--c:#1e3a5f">侵入不可エリア</span>
+        <span style="--c:linear-gradient(90deg,#facc15,#ef4444)">経路（色＝疲労度）</span>
+      </div>
+      <p id="status">-</p>
+      <canvas id="board" width="720" height="720"></canvas>
+      <p style="margin:14px 0 4px">疲労度（横軸：累積移動距離）</p>
+      <canvas id="fatigue" width="720" height="200"></canvas>
+    </section>
+  </div>
+
+<script>
+"use strict";
+// ============================================================ 乱数・生成（tools/src/lib.rs と同一）
+const MASK = (1n << 64n) - 1n;
+class Rng {
+  constructor(seed){ this.s = (BigInt(seed) ^ 0x9E3779B97F4A7C15n) & MASK; }
+  next(){
+    this.s = (this.s + 0x9E3779B97F4A7C15n) & MASK;
+    let z = this.s;
+    z = ((z ^ (z >> 30n)) * 0xBF58476D1CE4E5B9n) & MASK;
+    z = ((z ^ (z >> 27n)) * 0x94D049BB133111EBn) & MASK;
+    return z ^ (z >> 31n);
+  }
+  range(lo, hi){ return lo + Number(this.next() % BigInt(hi - lo + 1)); }
+  f64(){ return Number(this.next() >> 11n) / 9007199254740992; }
+  normal(){
+    const u1 = Math.max(this.f64(), 1e-12), u2 = this.f64();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+}
+// Rust の f64::round（0.5 は 0 から遠い方へ）
+const rround = x => Math.sign(x) * Math.round(Math.abs(x));
+
+function segHits(p, q, c){
+  const dx = q[0]-p[0], dy = q[1]-p[1], fx = c[0]-p[0], fy = c[1]-p[1];
+  const r2 = c[2]*c[2], len2 = dx*dx + dy*dy, dot = fx*dx + fy*dy;
+  if (len2 === 0 || dot <= 0) return fx*fx + fy*fy < r2;
+  if (dot >= len2){ const gx = c[0]-q[0], gy = c[1]-q[1]; return gx*gx + gy*gy < r2; }
+  const cross = dx*fy - dy*fx;
+  return cross*cross < r2*len2;   // 最大 ~1.6e13 なので double で厳密
+}
+const segOk = (p, q, cs) => cs.every(c => !segHits(p, q, c));
+const insideC = (p, c) => (p[0]-c[0])**2 + (p[1]-c[1])**2 < c[2]*c[2];
+const inBoard = (p, n) => p[0] >= 0 && p[0] <= n && p[1] >= 0 && p[1] <= n;
+
+function components(n, circles){
+  const w = n + 1, idx = (x, y) => x*w + y;
+  const comp = new Int32Array(w*w).fill(-1);
+  const free = new Uint8Array(w*w).fill(1), near = new Uint8Array(w*w);
+  for (const [cx, cy, r] of circles){
+    for (let x = Math.max(0, cx-r-2); x <= Math.min(n, cx+r+2); x++)
+      for (let y = Math.max(0, cy-r-2); y <= Math.min(n, cy+r+2); y++){
+        const d2 = (x-cx)**2 + (y-cy)**2;
+        if (d2 < r*r) free[idx(x,y)] = 0;
+        if (d2 < (r+2)*(r+2)) near[idx(x,y)] = 1;
+      }
+  }
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  let best = -1, bestSize = 0, cid = 0;
+  const qx = new Int32Array(w*w), qy = new Int32Array(w*w);
+  for (let sx = 0; sx <= n; sx++) for (let sy = 0; sy <= n; sy++){
+    const si = idx(sx, sy);
+    if (!free[si] || comp[si] >= 0) continue;
+    comp[si] = cid; let head = 0, tail = 0; qx[tail] = sx; qy[tail++] = sy;
+    while (head < tail){
+      const x = qx[head], y = qy[head++];
+      for (const [dx, dy] of dirs){
+        const nx = x+dx, ny = y+dy;
+        if (nx < 0 || nx > n || ny < 0 || ny > n) continue;
+        const ni = idx(nx, ny);
+        if (!free[ni] || comp[ni] >= 0) continue;
+        if ((near[idx(x,y)] || near[ni]) && !segOk([x,y], [nx,ny], circles)) continue;
+        comp[ni] = cid; qx[tail] = nx; qy[tail++] = ny;
+      }
+    }
+    if (tail > bestSize){ best = cid; bestSize = tail; }
+    cid++;
+  }
+  return [comp, best, bestSize];
+}
+
+function gen(seed){
+  const rng = new Rng(seed), n = 1000;
+  for (;;){
+    const f = rng.range(1, 10), s = rng.range(100, 400), w = rng.range(0, 4), m = rng.range(1, 4), k = rng.range(0, 40);
+    const circles = [];
+    while (circles.length < k){
+      let cx, cy, r;
+      if (circles.length > 0 && rng.f64() < 0.6){
+        const c = circles[rng.range(0, circles.length - 1)];
+        r = rng.range(20, 100);
+        const ang = rng.f64() * 2 * Math.PI;
+        const d = (c[2] + r) * (0.5 + 0.5 * rng.f64());
+        cx = c[0] + rround(d * Math.cos(ang)); cy = c[1] + rround(d * Math.sin(ang));
+      } else {
+        r = rng.range(20, 150); cx = rng.range(0, n); cy = rng.range(0, n);
+      }
+      if (inBoard([cx, cy], n)) circles.push([cx, cy, r]);
+    }
+    const [comp, main, size] = components(n, circles);
+    if (size < 0.5 * (n+1) * (n+1)) continue;
+    const ok = p => inBoard(p, n) && comp[p[0]*(n+1) + p[1]] === main;
+    const nc = rng.range(0, 8);
+    const centers = [];
+    for (let i = 0; i < nc; i++) centers.push([rng.range(0, n), rng.range(0, n), rng.range(20, 80)]);
+    const ratio = nc === 0 ? 0 : rng.f64() * 0.8;
+    const used = new Set(), towns = [], fountains = [];
+    while (towns.length < s){
+      let p;
+      if (rng.f64() < ratio){
+        const c = centers[rng.range(0, nc - 1)];
+        const px = rround(c[0] + c[2] * rng.normal());
+        const py = rround(c[1] + c[2] * rng.normal());
+        p = [px, py];
+      } else { const px = rng.range(0, n); p = [px, rng.range(0, n)]; }
+      const key = p[0] + "," + p[1];
+      if (ok(p) && !used.has(key)){ used.add(key); towns.push(p); }
+    }
+    while (fountains.length < w){
+      const px = rng.range(0, n), p = [px, rng.range(0, n)];
+      const key = p[0] + "," + p[1];
+      if (ok(p) && !used.has(key)){ used.add(key); fountains.push(p); }
+    }
+    let out = `${n} ${s} ${w} ${k} ${m} 1000 ${f}\n`;
+    for (const p of towns) out += `${p[0]} ${p[1]}\n`;
+    for (const p of fountains) out += `${p[0]} ${p[1]}\n`;
+    for (const c of circles) out += `${c[0]} ${c[1]} ${c[2]}\n`;
+    return out;
+  }
+}
+
+// ============================================================ パース・採点
+function parseInput(str){
+  const t = str.trim().split(/\s+/).map(Number); let i = 0;
+  const [n, s, w, k, m, v, f] = t.slice(0, 7); i = 7;
+  const towns = [], fountains = [], circles = [];
+  for (let a = 0; a < s; a++){ towns.push([t[i], t[i+1]]); i += 2; }
+  for (let a = 0; a < w; a++){ fountains.push([t[i], t[i+1]]); i += 2; }
+  for (let a = 0; a < k; a++){ circles.push([t[i], t[i+1], t[i+2]]); i += 3; }
+  if (towns.length !== s || t.slice(0, i).some(Number.isNaN)) throw new Error("入力の形式が正しくありません");
+  return {n, m, v, f, towns, fountains, circles};
+}
+function parseOutput(str){
+  const tok = str.trim().split(/\s+/).filter(x => x.length); let i = 0;
+  const nx = what => {
+    if (i >= tok.length) throw new Error(`出力が途中で終わっています (${what})`);
+    const x = tok[i++];
+    // tools/src/lib.rs と同じ規則：「-」の有無と 1〜18 桁の数字のみ
+    if (!/^-?\d{1,18}$/.test(x)) throw new Error(`整数ではありません: ${x}`);
+    return Number(x);
+  };
+  const L = nx("L"); if (L < 0) throw new Error(`L が負です: ${L}`);
+  const stations = []; for (let a = 0; a < L; a++) stations.push([nx("給水機"), nx("給水機")]);
+  const T = nx("T"); if (T < 0 || T > 100000) throw new Error(`T が範囲外です: ${T}`);
+  const path = []; for (let a = 0; a < T; a++) path.push([nx("経路"), nx("経路")]);
+  if (i < tok.length) throw new Error(`出力の末尾に余分な文字列があります: ${tok[i]}`);
+  return {stations, path};
+}
+// 経路全体をシミュレートし、各ステップ後の状態を記録する
+function simulate(inp, out){
+  const key = p => p[0]*4096 + p[1];
+  const early = err => ({err, hist: [{t: 0, time: 0, len: 0, fat: inp.v, peak: inp.v, s: 0}], maxPeak: inp.v});
+  if (out.stations.length > inp.m) return early(`給水機の数が M を超えています (${out.stations.length} > ${inp.m})`);
+  const water = new Set(inp.fountains.map(key));
+  for (let i = 0; i < out.stations.length; i++){
+    const p = out.stations[i];
+    if (!inBoard(p, inp.n)) return early(`給水機 ${i+1} が盤面外です (${p[0]}, ${p[1]})`);
+    if (inp.circles.some(c => insideC(p, c))) return early(`給水機 ${i+1} が侵入不可エリア内です (${p[0]}, ${p[1]})`);
+    water.add(key(p));
+  }
+  const townId = new Map(inp.towns.map((p, i) => [key(p), i]));
+  const visitStep = new Int32Array(inp.towns.length).fill(-1); visitStep[0] = 0;
+  let cur = inp.towns[0], s = 0, time = 0, length = 0;
+  const hist = [{t: 0, time: 0, len: 0, fat: inp.v, peak: inp.v, s: 0}];
+  let maxPeak = inp.v;
+  for (let t = 0; t < out.path.length; t++){
+    const q = out.path[t];
+    let err = null;
+    if (!inBoard(q, inp.n)) err = `${t+1} 番目の点が盤面外です (${q[0]}, ${q[1]})`;
+    else if (!segOk(cur, q, inp.circles)) err = `${t+1} 番目の移動 (${cur[0]}, ${cur[1]}) -> (${q[0]}, ${q[1]}) が侵入不可エリアを通過しています`;
+    if (err) return {err, hist, visitStep, failAt: t, maxPeak, time};
+    const dx = q[0]-cur[0], dy = q[1]-cur[1], d = Math.sqrt(dx*dx + dy*dy);
+    time += inp.v * d + inp.f * (2*s*d + d*d) / 2;
+    s += d; length += d;
+    const peak = inp.v + inp.f * s;
+    if (peak > maxPeak) maxPeak = peak;
+    if (water.has(key(q))) s = 0;
+    const id = townId.get(key(q));
+    if (id !== undefined && visitStep[id] < 0) visitStep[id] = t + 1;
+    hist.push({t: t+1, time, len: length, fat: inp.v + inp.f * s, peak, s});
+    cur = q;
+  }
+  let err = null;
+  if (cur[0] !== inp.towns[0][0] || cur[1] !== inp.towns[0][1])
+    err = `最終位置 (${cur[0]}, ${cur[1]}) が街1 (${inp.towns[0][0]}, ${inp.towns[0][1]}) ではありません`;
+  let unvisited = 0; for (const v of visitStep) if (v < 0) unvisited++;
+  const score = Math.round(time) + 1e9 * unvisited;
+  return {err, hist, visitStep, time, length, unvisited, score, maxPeak};
+}
+
+// ============================================================ 描画
+const $ = id => document.getElementById(id);
+let state = null, playTimer = null;
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// キャンバスの大きさは変わったときだけ設定し直す（毎フレームの再確保を避ける）
+function setupCanvas(cv, h){
+  const dpr = window.devicePixelRatio || 1, w = 720;
+  if (cv.width !== w * dpr || cv.height !== h * dpr){ cv.width = w * dpr; cv.height = h * dpr; }
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+function clearAll(msgHtml){
+  stopPlay(); state = null;
+  const sl = $("slider"); sl.max = 0; sl.value = 0; $("stepLabel").textContent = "0 / 0";
+  for (const [id, h] of [["board", 720], ["fatigue", 200]]){
+    const ctx = setupCanvas($(id), h); ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, 720, h);
+  }
+  $("status").innerHTML = msgHtml;
+}
+function fatColor(x){ // 0..1 -> 黄→赤
+  const t = Math.max(0, Math.min(1, x));
+  const r = 250 - 11*t, g = 204 - 136*t, b = 21 + 47*t;
+  return `rgb(${r|0},${g|0},${b|0})`;
+}
+
+function render(step){
+  if (!state) return;
+  const {inp, out, sim} = state;
+  const ctx = setupCanvas($("board"), 720);
+  const pad = 10, sc = (720 - 2*pad) / inp.n;
+  const X = p => pad + p[0]*sc, Y = p => pad + p[1]*sc;
+  ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, 720, 720);
+  ctx.strokeStyle = "#1f2937"; ctx.lineWidth = 1;
+  for (let g = 0; g <= inp.n; g += 100){
+    ctx.beginPath(); ctx.moveTo(X([g,0]), Y([g,0])); ctx.lineTo(X([g,inp.n]), Y([g,inp.n])); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X([0,g]), Y([0,g])); ctx.lineTo(X([inp.n,g]), Y([inp.n,g])); ctx.stroke();
+  }
+  // 侵入不可エリア
+  ctx.save(); ctx.beginPath(); ctx.rect(pad, pad, inp.n*sc, inp.n*sc); ctx.clip();
+  ctx.fillStyle = "#1e3a5f";
+  for (const c of inp.circles){ ctx.beginPath(); ctx.arc(X(c), Y(c), c[2]*sc, 0, 2*Math.PI); ctx.fill(); }
+  ctx.strokeStyle = "#2563eb88";
+  for (const c of inp.circles){ ctx.beginPath(); ctx.arc(X(c), Y(c), c[2]*sc, 0, 2*Math.PI); ctx.stroke(); }
+  ctx.restore();
+  ctx.strokeStyle = "#475569"; ctx.strokeRect(pad, pad, inp.n*sc, inp.n*sc);
+
+  // 経路（step まで）
+  const hist = sim.hist;
+  const maxFat = Math.max(inp.v * 2, sim.maxPeak);
+  const lim = Math.max(0, Math.min(step, hist.length - 1));
+  // 色を 32 段階にまとめ、段階ごとに 1 回だけ stroke する（10^5 点でも軽く描ける）
+  const BUCKETS = 32, paths = Array.from({length: BUCKETS}, () => new Path2D());
+  let cur = inp.towns[0];
+  for (let t = 1; t <= lim; t++){
+    const q = out.path[t-1];
+    const r = Math.max(0, Math.min(1, (hist[t].peak - inp.v) / (maxFat - inp.v)));
+    const pth = paths[Math.min(BUCKETS - 1, Math.floor(r * BUCKETS))];
+    pth.moveTo(X(cur), Y(cur)); pth.lineTo(X(q), Y(q));
+    cur = q;
+  }
+  ctx.lineWidth = 2; ctx.lineCap = "round";
+  paths.forEach((pth, b) => { ctx.strokeStyle = fatColor((b + 0.5) / BUCKETS); ctx.stroke(pth); });
+  if (sim.failAt !== undefined && step > sim.failAt){
+    const q = out.path[sim.failAt];
+    ctx.strokeStyle = "#f87171"; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(X(cur), Y(cur)); ctx.lineTo(X(q), Y(q)); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // 既設の給水所
+  ctx.fillStyle = "#22d3ee";
+  for (const p of inp.fountains) ctx.fillRect(X(p)-4, Y(p)-4, 8, 8);
+  // 設置した給水機
+  ctx.strokeStyle = "#f0abfc"; ctx.lineWidth = 2;
+  for (const p of out.stations){ ctx.beginPath(); ctx.arc(X(p), Y(p), 6, 0, 2*Math.PI); ctx.stroke(); }
+  // 街
+  inp.towns.forEach((p, i) => {
+    const vs = sim.visitStep ? sim.visitStep[i] : -1;
+    ctx.fillStyle = i === 0 ? "#60a5fa" : (vs >= 0 && vs <= step ? "#4ade80" : "#f87171");
+    ctx.beginPath(); ctx.arc(X(p), Y(p), i === 0 ? 6 : 3, 0, 2*Math.PI); ctx.fill();
+  });
+  // 現在位置
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(X(cur), Y(cur), 8, 0, 2*Math.PI); ctx.stroke();
+
+  renderFatigue(step);
+  const h = hist[lim];
+  let msg = `step ${lim} / ${out.path.length}   時間 ${Math.round(h.time)}   距離 ${h.len.toFixed(1)}   疲労度 ${h.fat.toFixed(1)}\n`;
+  if (sim.err) msg += `<span class="err">WA: ${esc(sim.err)}</span>` + (sim.time !== undefined ? `   (参考: ここまでの時間 ${sim.time.toFixed(3)})` : "");
+  else msg += `得点 = ${sim.score.toLocaleString()}   (時間 ${sim.time.toFixed(3)}, 総距離 ${sim.length.toFixed(3)}, 未訪問 ${sim.unvisited})`;
+  $("status").innerHTML = msg;
+  $("stepLabel").textContent = `${lim} / ${out.path.length}`;
+}
+
+function renderFatigue(step){
+  const {inp, sim} = state, hist = sim.hist;
+  const ctx = setupCanvas($("fatigue"), 200);
+  ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, 720, 200);
+  if (hist.length < 2) return;
+  const L = hist[hist.length-1].len || 1;
+  const maxF = sim.maxPeak * 1.1;
+  const x0 = 50, x1 = 710, y0 = 180, y1 = 10;
+  const X = d => x0 + (x1-x0) * d / L, Y = f => y0 - (y0-y1) * f / maxF;
+  ctx.strokeStyle = "#475569"; ctx.fillStyle = "#94a3b8"; ctx.font = "11px sans-serif"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+  for (let i = 0; i <= 4; i++){
+    const f = maxF * i / 4; ctx.fillText(Math.round(f), 4, Y(f) + 4);
+    const d = L * i / 4; ctx.fillText(Math.round(d), X(d) - 10, 196);
+  }
+  ctx.strokeStyle = "#64748b"; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(x0, Y(inp.v)); ctx.lineTo(x1, Y(inp.v)); ctx.stroke(); ctx.setLineDash([]);
+  // 鋸歯状の疲労度グラフ（給水直前のピーク→V に落ちる）
+  ctx.strokeStyle = "#a3e635"; ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.moveTo(X(0), Y(inp.v));
+  for (let t = 1; t < hist.length; t++){
+    ctx.lineTo(X(hist[t].len), Y(hist[t].peak));
+    if (hist[t].fat !== hist[t].peak) ctx.lineTo(X(hist[t].len), Y(hist[t].fat));
+  }
+  ctx.stroke();
+  const lim = Math.min(step, hist.length - 1);
+  ctx.strokeStyle = "#fff"; ctx.beginPath(); ctx.moveTo(X(hist[lim].len), y1); ctx.lineTo(X(hist[lim].len), y0); ctx.stroke();
+}
+
+function drawAll(){
+  stopPlay();
+  let inp, out;
+  try { inp = parseInput($("inputArea").value); }
+  catch (e){ clearAll(`<span class="err">入力エラー: ${esc(e.message)}</span>`); return; }
+  try { out = $("outputArea").value.trim() ? parseOutput($("outputArea").value) : {stations: [], path: []}; }
+  catch (e){
+    // 盤面だけ描き、出力のエラーを表示する
+    clearAll("");
+    out = {stations: [], path: []};
+    state = {inp, out, sim: {...simulate(inp, out), err: e.message, time: undefined}};
+    render(0); return;
+  }
+  const sim = simulate(inp, out);
+  state = {inp, out, sim};
+  const sl = $("slider"); sl.max = out.path.length; sl.value = out.path.length;
+  render(out.path.length);
+}
+function stopPlay(){ if (playTimer){ clearInterval(playTimer); playTimer = null; $("playBtn").textContent = "▶ 再生"; } }
+$("drawBtn").onclick = drawAll;
+$("slider").oninput = e => { stopPlay(); render(+e.target.value); };
+$("playBtn").onclick = () => {
+  if (!state) drawAll();
+  if (!state) return;
+  if (playTimer){ stopPlay(); return; }
+  const sl = $("slider"), total = +sl.max;
+  if (+sl.value >= total) sl.value = 0;
+  const inc = Math.max(1, Math.ceil(total / 400));
+  $("playBtn").textContent = "■ 停止";
+  playTimer = setInterval(() => {
+    const v = Math.min(total, +sl.value + inc); sl.value = v; render(v);
+    if (v >= total) stopPlay();
+  }, 30);
+};
+$("genBtn").onclick = () => {
+  $("status").textContent = "生成中...";
+  setTimeout(() => { $("inputArea").value = gen(+$("seed").value || 0); $("outputArea").value = ""; drawAll(); }, 10);
+};
+</script>
+</body>
+</html>
