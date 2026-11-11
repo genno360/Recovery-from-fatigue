@@ -1,5 +1,7 @@
 # Recovery from Fatigue
 
+作者: [@Gen_no_4262](https://x.com/Gen_no_4262)
+
 ヒューリスティック型（AHC 形式）の最適化問題です。
 
 ランナーが街1から出発してすべての街を巡り、街1に戻ります。走るほど疲労がたまり、移動にかかる時間が増えていきます。
@@ -7,7 +9,7 @@
 
 ## 問題文
 
-[index.html](index.html) をブラウザで開いてください。問題文の最後にビジュアライザが付いています。
+https://genno360.github.io/Recovery-from-fatigue/ で読めます（ローカルでは [index.html](index.html) をブラウザで開いてください）。問題文の最後にビジュアライザが付いています。
 
 ## ファイル構成
 
