@@ -176,41 +176,50 @@ fn main() {
 
     // ---- 給水機の位置: 街の上に置く（k-medoids, 既設給水所は固定の medoid）
     let mut waters: Vec<usize> = (ns..nk2).collect();
-    let kp: i32 = std::env::var("KP").ok().and_then(|x| x.parse().ok()).unwrap_or(2);
-    let near_cost = |ws: &[usize]| -> f64 {
-        (0..ns).map(|t| ws.iter().map(|&w| dd(t, w)).fold(f64::INFINITY, f64::min).powi(kp)).sum::<f64>()
-    };
-    let mut stations: Vec<usize> = vec![];
-    for _ in 0..m {
-        let mut best = (f64::INFINITY, 0);
-        for c in 0..ns {
-            if stations.contains(&c) { continue; }
-            let mut ws = waters.clone();
-            ws.extend(&stations);
-            ws.push(c);
-            let v = near_cost(&ws);
-            if v < best.0 { best = (v, c); }
-        }
-        stations.push(best.1);
-    }
-    // swap 改善
-    let mut improved = true;
-    while improved && start.elapsed().as_secs_f64() < 1.2 {
-        improved = false;
-        for k in 0..stations.len() {
-            let mut ws = waters.clone();
-            ws.extend(&stations);
-            let cur = near_cost(&ws);
-            let mut best = (cur, stations[k]);
+    let select = |kp: i32, tlim: f64| -> Vec<usize> {
+    let near_cost = |ws: &[usize], kp: i32| -> f64 {
+            (0..ns).map(|t| ws.iter().map(|&w| dd(t, w)).fold(f64::INFINITY, f64::min).powi(kp)).sum::<f64>()
+        };
+        let mut stations: Vec<usize> = vec![];
+        for _ in 0..m {
+            let mut best = (f64::INFINITY, 0);
             for c in 0..ns {
                 if stations.contains(&c) { continue; }
-                ws[waters.len() + k] = c;
-                let v = near_cost(&ws);
-                if v < best.0 - 1e-9 { best = (v, c); }
+                let mut ws = waters.clone();
+                ws.extend(&stations);
+                ws.push(c);
+                let v = near_cost(&ws, kp);
+                if v < best.0 { best = (v, c); }
             }
-            if best.1 != stations[k] { stations[k] = best.1; improved = true; }
+            stations.push(best.1);
         }
+        // swap 改善
+        let mut improved = true;
+        while improved && start.elapsed().as_secs_f64() < tlim {
+            improved = false;
+            for k in 0..stations.len() {
+                let mut ws = waters.clone();
+                ws.extend(&stations);
+                let cur = near_cost(&ws, kp);
+                let mut best = (cur, stations[k]);
+                for c in 0..ns {
+                    if stations.contains(&c) { continue; }
+                    ws[waters.len() + k] = c;
+                    let v = near_cost(&ws, kp);
+                    if v < best.0 - 1e-9 { best = (v, c); }
+                }
+                if best.1 != stations[k] { stations[k] = best.1; improved = true; }
+            }
+        }
+        stations
+    };
+    let mut cand: Vec<Vec<usize>> = vec![];
+    for (ci, kp) in [2, 1, 3].into_iter().enumerate() {
+        let mut st = select(kp, 0.15 + 0.1 * ci as f64);
+        st.sort();
+        if !cand.contains(&st) { cand.push(st); }
     }
+    let stations = cand[0].clone();
     waters.extend(&stations);
     let is_water: Vec<std::cell::Cell<bool>> = (0..nk2).map(|_| std::cell::Cell::new(false)).collect();
     for &w in &waters { is_water[w].set(true); }
@@ -257,28 +266,6 @@ fn main() {
         sq += g * g;
         vv * tot + ff * 0.5 * sq
     };
-    // 貪欲に給水訪問を挿入（改善がある限り）
-    {
-        let mut cur = eval(&seq);
-        loop {
-            let mut best = (cur, 0, 0);
-            let step = (seq.len() / 120).max(1);
-            let mut i = 1;
-            while i < seq.len() {
-                for &w in &waters {
-                    seq.insert(i, w + EX);
-                    let v = eval(&seq);
-                    seq.remove(i);
-                    if v < best.0 { best = (v, i, w); }
-                }
-                i += step;
-            }
-            if best.0 >= cur || start.elapsed().as_secs_f64() > 1.5 { break; }
-            seq.insert(best.1, best.2 + EX);
-            cur = best.0;
-        }
-    }
-
     // ---- SA (差分評価: 変更範囲を囲む給水点 L..R の区間コストだけ再計算)
     let wat = |x: usize| is_water[x % EX].get();
     let region = |seq: &[usize], l: usize, r: usize| -> f64 {
@@ -295,17 +282,21 @@ fn main() {
     let rb = |seq: &[usize], mut i: usize| { let n = seq.len(); while i < n - 1 && !wat(seq[i]) { i += 1; } i };
     let p0: f64 = std::env::var("P0").ok().and_then(|x| x.parse().ok()).unwrap_or(2e-4);
     let p1: f64 = std::env::var("P1").ok().and_then(|x| x.parse().ok()).unwrap_or(1e-7);
+    let mut sa = |mut seq: Vec<usize>, mut waters: Vec<usize>, t_end: f64| -> (f64, Vec<usize>, Vec<usize>, u64) {
+    for w in &is_water { w.set(false); }
+    for &w in &waters { is_water[w].set(true); }
+    let t_start = start.elapsed().as_secs_f64();
     let mut cur = eval(&seq);
     let mut best_seq = seq.clone();
     let mut best = cur;
     let mut best_waters = waters.clone();
-    let t_start = start.elapsed().as_secs_f64();
+    
     let (temp0, temp1) = (cur * p0, cur * p1);
     let mut temp = temp0;
     let mut iter: u64 = 0;
     loop {
         if iter & 255 == 0 {
-            let p = (start.elapsed().as_secs_f64() - t_start) / (tl - t_start);
+            let p = (start.elapsed().as_secs_f64() - t_start) / (t_end - t_start);
             if p >= 1.0 { break; }
             temp = temp0 * (temp1 / temp0).powf(p);
         }
@@ -422,6 +413,23 @@ fn main() {
         }
         if cur < best - 1e-6 { best = cur; best_seq.clone_from(&seq); best_waters.clone_from(&waters); }
     }
+    (best, best_seq, best_waters, iter)
+    };
+    let t_start = start.elapsed().as_secs_f64();
+    let mut res = None;
+    if cand.len() > 1 {
+        let tc = t_start + (tl - t_start) * 0.12;
+        let mut bestc: Option<(f64, Vec<usize>, Vec<usize>, u64)> = None;
+        for (ci, st) in cand.iter().enumerate() {
+            let mut w: Vec<usize> = (ns..nk2).collect();
+            w.extend(st);
+            let r = sa(seq.clone(), w, tc + (tl - t_start) * 0.12 * ci as f64);
+            if bestc.as_ref().map_or(true, |b| r.0 < b.0) { bestc = Some(r); }
+        }
+        let b = bestc.unwrap();
+        res = Some(sa(b.1, b.2, tl));
+    }
+    let (best, best_seq, best_waters, iter) = match res { Some(r) => r, None => sa(seq.clone(), waters.clone(), tl) };
     for w in &is_water { w.set(false); }
     for &w in &best_waters { is_water[w].set(true); }
     let chk = eval(&best_seq);

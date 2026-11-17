@@ -19,3 +19,5 @@
 | 00014 | 0-19 | 40821541 | 98.60 | 0 | 2.88 | SM=3 (station move 6%) |
 | 00015 | 0-19 | 40826973 | 98.70 | 0 | 2.88 | Or-opt block up to 15 (25%) |
 | 00016 | 0-99 | 42161753 | 98.94 | 0 | 2.88 | final: KP=2, TL=2.85, NB=20, SM=1, OL=3 |
+| 00017 | 0-19 | 40570811 | 99.01 | 0 | 2.88 | multi-candidate stations (KP=2,1,3) screened by short SA, no greedy init |
+| 00018 | 0-99 | 41707983 | 99.53 | 0 | 2.89 | multi-candidate stations, full |

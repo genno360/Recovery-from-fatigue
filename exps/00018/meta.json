@@ -1,0 +1,14 @@
+{
+ "exp": 18,
+ "note": "multi-candidate stations, full",
+ "parent": 16,
+ "seeds": "0-99",
+ "n": 100,
+ "total": 4170798284,
+ "mean": 41707982.84,
+ "rel": 99.529,
+ "fails": 0,
+ "max_time": 2.892,
+ "wall": 72.0,
+ "date": "2026-11-17T09:59:22"
+}

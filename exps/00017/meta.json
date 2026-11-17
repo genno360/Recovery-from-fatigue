@@ -1,0 +1,14 @@
+{
+ "exp": 17,
+ "note": "multi-candidate stations (KP=2,1,3) screened by short SA, no greedy init",
+ "parent": 13,
+ "seeds": "0-19",
+ "n": 20,
+ "total": 811416222,
+ "mean": 40570811.1,
+ "rel": 99.011,
+ "fails": 0,
+ "max_time": 2.883,
+ "wall": 14.4,
+ "date": "2026-11-17T09:58:08"
+}
