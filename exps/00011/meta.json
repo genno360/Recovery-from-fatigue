@@ -1,0 +1,14 @@
+{
+ "exp": 11,
+ "note": "neighbor moves NB=20, KP=1, full",
+ "parent": 2,
+ "seeds": "0-99",
+ "n": 100,
+ "total": 4265194398,
+ "mean": 42651943.98,
+ "rel": 99.451,
+ "fails": 0,
+ "max_time": 2.732,
+ "wall": 68.2,
+ "date": "2026-11-17T09:53:11"
+}

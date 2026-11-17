@@ -1,0 +1,14 @@
+{
+ "exp": 6,
+ "note": "station-move neighborhood (1%)",
+ "parent": 3,
+ "seeds": "0-19",
+ "n": 20,
+ "total": 851075736,
+ "mean": 42553786.8,
+ "rel": 98.76,
+ "fails": 0,
+ "max_time": 2.729,
+ "wall": 13.6,
+ "date": "2026-11-17T09:50:17"
+}

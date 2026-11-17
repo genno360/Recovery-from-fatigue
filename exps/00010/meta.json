@@ -1,0 +1,14 @@
+{
+ "exp": 10,
+ "note": "k-medoid objective sum d^2",
+ "parent": 7,
+ "seeds": "0-19",
+ "n": 20,
+ "total": 822669812,
+ "mean": 41133490.6,
+ "rel": 98.776,
+ "fails": 0,
+ "max_time": 2.73,
+ "wall": 13.6,
+ "date": "2026-11-17T09:51:52"
+}

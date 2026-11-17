@@ -1,0 +1,14 @@
+{
+ "exp": 3,
+ "note": "baseline exp2 on 0-19",
+ "parent": null,
+ "seeds": "0-19",
+ "n": 20,
+ "total": 857593915,
+ "mean": 42879695.75,
+ "rel": 99.334,
+ "fails": 0,
+ "max_time": 2.73,
+ "wall": 13.6,
+ "date": "2026-11-17T09:49:15"
+}

@@ -1,0 +1,14 @@
+{
+ "exp": 13,
+ "note": "KP=2 default, TL=2.85, SM=1",
+ "parent": null,
+ "seeds": "0-19",
+ "n": 20,
+ "total": 816104675,
+ "mean": 40805233.75,
+ "rel": 98.671,
+ "fails": 0,
+ "max_time": 2.881,
+ "wall": 14.4,
+ "date": "2026-11-17T09:54:48"
+}

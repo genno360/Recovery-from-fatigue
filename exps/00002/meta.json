@@ -1,0 +1,14 @@
+{
+ "exp": 2,
+ "note": "region-local delta eval (10x iters)",
+ "parent": 1,
+ "seeds": "0-99",
+ "n": 100,
+ "total": 4458587462,
+ "mean": 44585874.62,
+ "rel": 99.338,
+ "fails": 0,
+ "max_time": 2.749,
+ "wall": 68.2,
+ "date": "2026-11-17T09:48:52"
+}
