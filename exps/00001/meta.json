@@ -1,0 +1,14 @@
+{
+ "exp": 1,
+ "note": "SA on tour with water-visit tokens, k-medoid stations on towns",
+ "parent": 0,
+ "seeds": "0-99",
+ "n": 100,
+ "total": 4455933763,
+ "mean": 44559337.63,
+ "rel": 100.0,
+ "fails": 0,
+ "max_time": 2.734,
+ "wall": 68.2,
+ "date": "2026-11-17T09:46:43"
+}

@@ -1,0 +1,14 @@
+{
+ "exp": 0,
+ "note": "sample solver (baseline)",
+ "parent": null,
+ "seeds": "0-99",
+ "n": 100,
+ "total": 11452580051,
+ "mean": 114525800.51,
+ "rel": 100.0,
+ "fails": 0,
+ "max_time": 0.421,
+ "wall": 3.9,
+ "date": "2026-11-17T09:44:12"
+}

@@ -1,4 +1,5 @@
-//! Recovery from Fatigue サンプル解法
+//! Recovery from Fatigue 解法 (harness で開発)
+//! 可視グラフ最短路 → 給水機を k-medoids で街に置く → 給水訪問トークン入りの巡回列を SA
 //! 1. 街・既設の給水所・円の周りの点で可視グラフを作り、障害物を避けた最短路を求める
 //! 2. 最短路長を距離とした TSP を 2-opt / Or-opt で改善
 //! 3. 給水間隔の二乗和が小さくなるよう、新しい給水機を経路上に等間隔に置く
@@ -42,7 +43,7 @@ fn main() {
     let mut nx = || it.next().unwrap();
     let n = nx();
     let (ns, nw, nk, m) = (nx() as usize, nx() as usize, nx() as usize, nx() as usize);
-    let (_v, _f) = (nx(), nx());
+    let (vv, ff) = (nx() as f64, nx() as f64);
     let towns: Vec<P> = (0..ns).map(|_| (nx(), nx())).collect();
     let fountains: Vec<P> = (0..nw).map(|_| (nx(), nx())).collect();
     let circles: Vec<C> = (0..nk).map(|_| (nx(), nx(), nx())).collect();
@@ -134,9 +135,10 @@ fn main() {
     };
 
     // ---- 街ごとに Dijkstra（密グラフなので O(V^2)）
-    let mut dmat = vec![0.0f64; ns * ns];
-    let mut prev_all = vec![0u32; ns * nv];
-    for src in 0..ns {
+    let nk2 = ns + nw;
+    let mut dmat = vec![0.0f64; nk2 * nk2];
+    let mut prev_all = vec![0u32; nk2 * nv];
+    for src in 0..nk2 {
         let mut d = vec![f64::INFINITY; nv];
         let mut done = vec![false; nv];
         let prev = &mut prev_all[src * nv..(src + 1) * nv];
@@ -164,13 +166,56 @@ fn main() {
                 }
             }
         }
-        for t in 0..ns {
-            dmat[src * ns + t] = d[t];
+        for t in 0..nk2 {
+            dmat[src * nk2 + t] = d[t];
         }
     }
-    let dd = |a: usize, b: usize| dmat[a * ns + b];
+    let dd = |a: usize, b: usize| dmat[a * nk2 + b];
+    let tl: f64 = std::env::var("TL").ok().and_then(|x| x.parse().ok()).unwrap_or(2.7);
+    let mut rng = Rng(0x1234_5678_9abc_def1);
 
-    // ---- TSP: 最近傍法 + 2-opt + Or-opt
+    // ---- 給水機の位置: 街の上に置く（k-medoids, 既設給水所は固定の medoid）
+    let mut waters: Vec<usize> = (ns..nk2).collect();
+    let near_cost = |ws: &[usize]| -> f64 {
+        (0..ns).map(|t| ws.iter().map(|&w| dd(t, w)).fold(f64::INFINITY, f64::min)).sum::<f64>()
+    };
+    let mut stations: Vec<usize> = vec![];
+    for _ in 0..m {
+        let mut best = (f64::INFINITY, 0);
+        for c in 0..ns {
+            if stations.contains(&c) { continue; }
+            let mut ws = waters.clone();
+            ws.extend(&stations);
+            ws.push(c);
+            let v = near_cost(&ws);
+            if v < best.0 { best = (v, c); }
+        }
+        stations.push(best.1);
+    }
+    // swap 改善
+    let mut improved = true;
+    while improved && start.elapsed().as_secs_f64() < 1.2 {
+        improved = false;
+        for k in 0..stations.len() {
+            let mut ws = waters.clone();
+            ws.extend(&stations);
+            let cur = near_cost(&ws);
+            let mut best = (cur, stations[k]);
+            for c in 0..ns {
+                if stations.contains(&c) { continue; }
+                ws[waters.len() + k] = c;
+                let v = near_cost(&ws);
+                if v < best.0 - 1e-9 { best = (v, c); }
+            }
+            if best.1 != stations[k] { stations[k] = best.1; improved = true; }
+        }
+    }
+    waters.extend(&stations);
+    let mut is_water = vec![false; nk2];
+    for &w in &waters { is_water[w] = true; }
+    const EX: usize = 1000; // 追加の給水訪問トークン（取り除ける）は +EX
+
+    // ---- 初期解: 最近傍 TSP + 2-opt
     let mut tour = vec![0usize];
     let mut used = vec![false; ns];
     used[0] = true;
@@ -180,163 +225,148 @@ fn main() {
         used[nxt] = true;
         tour.push(nxt);
     }
-    let tl = 1.5;
-    let mut improved = true;
-    while improved && start.elapsed().as_secs_f64() < tl {
-        improved = false;
-        // 2-opt
-        for i in 0..ns - 1 {
-            for j in i + 2..ns {
-                let (a, b) = (tour[i], tour[i + 1]);
-                let (c, d) = (tour[j], tour[(j + 1) % ns]);
-                if a == d {
-                    continue;
-                }
-                if dd(a, c) + dd(b, d) < dd(a, b) + dd(c, d) - 1e-9 {
-                    tour[i + 1..=j].reverse();
-                    improved = true;
-                }
-            }
+    let mut seq: Vec<usize> = tour.clone();
+    seq.push(0);
+
+    let eval = |seq: &[usize]| -> f64 {
+        let mut tot = 0.0;
+        let mut sq = 0.0;
+        let mut g = 0.0;
+        let mut prev = seq[0] % EX;
+        for &x in &seq[1..] {
+            let x = x % EX;
+            let d = dd(prev, x);
+            tot += d;
+            g += d;
+            if is_water[x] { sq += g * g; g = 0.0; }
+            prev = x;
         }
-        // Or-opt（長さ 1〜3 の区間を移動）
-        for len in 1..=3usize {
+        sq += g * g;
+        vv * tot + ff * 0.5 * sq
+    };
+    // 貪欲に給水訪問を挿入（改善がある限り）
+    {
+        let mut cur = eval(&seq);
+        loop {
+            let mut best = (cur, 0, 0);
+            let step = (seq.len() / 120).max(1);
             let mut i = 1;
-            while i + len <= ns {
-                let p = tour[i - 1];
-                let a = tour[i];
-                let b = tour[i + len - 1];
-                let q = tour[(i + len) % ns];
-                let gain_remove = dd(p, a) + dd(b, q) - dd(p, q);
-                let mut moved = false;
-                for j in 0..ns {
-                    if j + 1 >= i && j < i + len {
-                        continue;
-                    }
-                    let (x, y) = (tour[j], tour[(j + 1) % ns]);
-                    if (j + 1) % ns == i {
-                        continue;
-                    }
-                    let add1 = dd(x, a) + dd(b, y) - dd(x, y);
-                    let add2 = dd(x, b) + dd(a, y) - dd(x, y);
-                    if add1.min(add2) < gain_remove - 1e-9 {
-                        let mut seg: Vec<usize> = tour.drain(i..i + len).collect();
-                        if add2 < add1 {
-                            seg.reverse();
-                        }
-                        let pos = tour.iter().position(|&t| t == x).unwrap() + 1;
-                        tour.splice(pos..pos, seg);
-                        moved = true;
-                        improved = true;
-                        break;
-                    }
+            while i < seq.len() {
+                for &w in &waters {
+                    seq.insert(i, w + EX);
+                    let v = eval(&seq);
+                    seq.remove(i);
+                    if v < best.0 { best = (v, i, w); }
                 }
-                if !moved {
-                    i += 1;
-                }
+                i += step;
             }
+            if best.0 >= cur || start.elapsed().as_secs_f64() > 1.5 { break; }
+            seq.insert(best.1, best.2 + EX);
+            cur = best.0;
         }
-        // 街1 を先頭に保つ
-        let z = tour.iter().position(|&t| t == 0).unwrap();
-        tour.rotate_left(z);
     }
+
+    // ---- SA
+    let mut cur = eval(&seq);
+    let mut best_seq = seq.clone();
+    let mut best = cur;
+    let t_start = start.elapsed().as_secs_f64();
+    let (temp0, temp1) = (cur * 2e-4, cur * 1e-7);
+    let mut temp = temp0;
+    let mut iter: u64 = 0;
+    loop {
+        if iter & 255 == 0 {
+            let p = (start.elapsed().as_secs_f64() - t_start) / (tl - t_start);
+            if p >= 1.0 { break; }
+            temp = temp0 * (temp1 / temp0).powf(p);
+        }
+        iter += 1;
+        let len = seq.len();
+        let thr = -temp * rng.f64().max(1e-300).ln();
+        let kind = rng.next() % 100;
+        if kind < 35 {
+            // 2-opt
+            let i = 1 + (rng.next() as usize) % (len - 2);
+            let span = 1 + (rng.next() as usize) % 80;
+            let j = (i + span).min(len - 2);
+            if j <= i { continue; }
+            seq[i..=j].reverse();
+            let v = eval(&seq);
+            if v <= cur + thr { cur = v; } else { seq[i..=j].reverse(); }
+        } else if kind < 75 {
+            // Or-opt: [i, i+l) を j の前へ
+            let l = 1 + (rng.next() as usize) % 3;
+            if len < l + 3 { continue; }
+            let i = 1 + (rng.next() as usize) % (len - 1 - l);
+            let off = (rng.next() as usize) % 120;
+            let j = if rng.next() & 1 == 0 { i + l + 1 + off } else { i.saturating_sub(off + 1).max(1) };
+            if j > len - 1 || (j >= i && j <= i + l) { continue; }
+            let rev = rng.next() % 2 == 0;
+            if rev { seq[i..i + l].reverse(); }
+            if j > i { seq[i..j].rotate_left(l); } else { seq[j..i + l].rotate_right(l); }
+            let v = eval(&seq);
+            if v <= cur + thr { cur = v; } else {
+                if j > i { seq[i..j].rotate_right(l); } else { seq[j..i + l].rotate_left(l); }
+                if rev { seq[i..i + l].reverse(); }
+            }
+        } else if kind < 87 {
+            // 給水訪問を挿入（前後に近い給水点を選ぶ）
+            let i = 1 + (rng.next() as usize) % (len - 1);
+            let (a, b) = (seq[i - 1] % EX, seq[i] % EX);
+            let w = if rng.next() % 3 == 0 { waters[(rng.next() as usize) % waters.len()] } else {
+                *waters.iter().min_by(|&&x, &&y| (dd(a, x) + dd(x, b)).partial_cmp(&(dd(a, y) + dd(y, b))).unwrap()).unwrap()
+            };
+            if w == a || w == b || is_water[a] || is_water[b] { continue; }
+            seq.insert(i, w + EX);
+            let v = eval(&seq);
+            if v < cur + thr { cur = v; } else { seq.remove(i); }
+        } else if kind < 95 {
+            // 給水訪問を削除
+            let i = 1 + (rng.next() as usize) % (len - 2);
+            if seq[i] < EX { continue; }
+            let x = seq.remove(i);
+            let v = eval(&seq);
+            if v <= cur + thr { cur = v; } else { seq.insert(i, x); }
+        } else {
+            // 給水訪問の給水点を変更
+            let i = 1 + (rng.next() as usize) % (len - 2);
+            if seq[i] < EX { continue; }
+            let x = seq[i];
+            seq[i] = waters[(rng.next() as usize) % waters.len()] + EX;
+            let v = eval(&seq);
+            if v <= cur + thr { cur = v; } else { seq[i] = x; }
+        }
+        if cur < best - 1e-9 { best = cur; best_seq.clone_from(&seq); }
+    }
+    eprintln!("iter={} best={:.0} waters={} visits={}", iter, best, waters.len(), best_seq.len());
+    let seq = best_seq;
 
     // ---- 経路を点列に展開
     let mut path: Vec<P> = vec![towns[0]];
-    for k in 0..ns {
-        let (a, b) = (tour[k], tour[(k + 1) % ns]);
-        // b から a へ prev を辿ると a -> b の順になる（a を始点とした最短路木）
+    for k in 0..seq.len() - 1 {
+        let (a, b) = (seq[k] % EX, seq[k + 1] % EX);
         let prev = &prev_all[a * nv..(a + 1) * nv];
-        let mut seq = vec![];
+        let mut sq = vec![];
         let mut x = b;
-        while x != a {
-            seq.push(x);
-            x = prev[x] as usize;
-        }
-        seq.reverse();
-        for x in seq {
-            if *path.last().unwrap() != nodes[x] {
-                path.push(nodes[x]);
-            }
+        while x != a { sq.push(x); x = prev[x] as usize; }
+        sq.reverse();
+        for x in sq {
+            path.push(nodes[x]);
         }
     }
-
-    // ---- 給水機の配置
-    // 給水点で区切った区間ごとに、追加する給水機の数を貪欲に割り当てる（区間長 G を k+1 等分するとコスト G^2/(k+1)）
-    let water: std::collections::HashSet<P> = fountains.iter().cloned().collect();
-    let mut cum = vec![0.0f64; path.len()];
-    for i in 1..path.len() {
-        cum[i] = cum[i - 1] + dist(path[i - 1], path[i]);
-    }
-    let mut breaks = vec![0usize];
-    for i in 1..path.len() - 1 {
-        if water.contains(&path[i]) {
-            breaks.push(i);
-        }
-    }
-    breaks.push(path.len() - 1);
-    let gaps: Vec<(f64, f64)> = breaks.windows(2).map(|w| (cum[w[0]], cum[w[1]] - cum[w[0]])).collect();
-    let mut cnt = vec![0usize; gaps.len()];
-    for _ in 0..m {
-        let gain = |g: usize, k: usize| gaps[g].1 * gaps[g].1 * (1.0 / (k + 1) as f64 - 1.0 / (k + 2) as f64);
-        let g = (0..gaps.len()).max_by(|&a, &b| gain(a, cnt[a]).partial_cmp(&gain(b, cnt[b])).unwrap()).unwrap();
-        cnt[g] += 1;
-    }
-    // 目標の弧長位置
-    let mut targets: Vec<f64> = vec![];
-    for (g, &(st, len)) in gaps.iter().enumerate() {
-        for k in 1..=cnt[g] {
-            targets.push(st + len * k as f64 / (cnt[g] + 1) as f64);
-        }
-    }
-    targets.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let mut stations: Vec<P> = vec![];
-    let mut newpath: Vec<P> = vec![path[0]];
-    let mut ti = 0;
-    for i in 1..path.len() {
-        let (a, b) = (path[i - 1], path[i]);
-        while ti < targets.len() && targets[ti] <= cum[i] {
-            let t = ((targets[ti] - cum[i - 1]) / (cum[i] - cum[i - 1]).max(1e-9)).clamp(0.0, 1.0);
-            let fx = a.0 as f64 + (b.0 - a.0) as f64 * t;
-            let fy = a.1 as f64 + (b.1 - a.1) as f64 * t;
-            let last = *newpath.last().unwrap();
-            // 近くの整数点で、前後の移動が合法なものを探す
-            let mut best: Option<(f64, P)> = None;
-            for ox in -2..=2i64 {
-                for oy in -2..=2i64 {
-                    let p = (fx.round() as i64 + ox, fy.round() as i64 + oy);
-                    if p.0 < 0 || p.0 > n || p.1 < 0 || p.1 > n || inside_any(p, &circles) {
-                        continue;
-                    }
-                    if !seg_ok(last, p, &circles) || !seg_ok(p, b, &circles) {
-                        continue;
-                    }
-                    let c = dist(last, p) + dist(p, b);
-                    if best.map_or(true, |(bc, _)| c < bc) {
-                        best = Some((c, p));
-                    }
-                }
-            }
-            let p = best.map(|x| x.1).unwrap_or(last);
-            if p != last {
-                newpath.push(p);
-            }
-            stations.push(p);
-            ti += 1;
-        }
-        newpath.push(b);
-    }
-    stations.sort();
-    stations.dedup();
-
-    // ---- 出力
+    // 同一点の連続は除く（給水点で止まる必要はない: 点に到達すれば給水される）
+    path.dedup();
+    let st: Vec<P> = stations.iter().map(|&t| towns[t]).collect();
     let mut out = String::new();
-    out += &format!("{}\n", stations.len());
-    for p in &stations {
-        out += &format!("{} {}\n", p.0, p.1);
-    }
-    out += &format!("{}\n", newpath.len() - 1);
-    for p in &newpath[1..] {
-        out += &format!("{} {}\n", p.0, p.1);
-    }
+    out += &format!("{}\n", st.len());
+    for p in &st { out += &format!("{} {}\n", p.0, p.1); }
+    out += &format!("{}\n", path.len() - 1);
+    for p in &path[1..] { out += &format!("{} {}\n", p.0, p.1); }
     print!("{}", out);
+}
+
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> u64 { self.0 ^= self.0 << 7; self.0 ^= self.0 >> 9; self.0 }
+    fn f64(&mut self) -> f64 { (self.next() >> 11) as f64 / (1u64 << 53) as f64 }
 }

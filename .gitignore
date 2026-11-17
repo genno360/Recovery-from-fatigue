@@ -8,3 +8,6 @@ old/
 # ローカルの出力・設定
 out/
 .claude/
+target/
+__pycache__/
+.cpu.lock
