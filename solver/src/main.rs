@@ -225,6 +225,7 @@ fn main() {
     const EX: usize = 1000;
     let nbp: u64 = std::env::var("NB").ok().and_then(|x| x.parse().ok()).unwrap_or(20);
     #[allow(non_snake_case)] let NB = nbp;
+    #[allow(non_snake_case)] let OL: usize = std::env::var("OL").ok().and_then(|x| x.parse().ok()).unwrap_or(3);
     #[allow(non_snake_case)] let SM: u64 = std::env::var("SM").ok().and_then(|x| x.parse().ok()).unwrap_or(1); // 追加の給水訪問トークン（取り除ける）は +EX
 
     // ---- 初期解: 最近傍 TSP + 2-opt
@@ -354,7 +355,7 @@ fn main() {
             if dlt <= thr { cur += dlt; } else { seq[i..=j].reverse(); }
         } else if kind < 75 {
             // Or-opt: [i, i+l) を j の前へ
-            let ln = 1 + (rng.next() as usize) % 3;
+            let ln = 1 + (rng.next() as usize) % if rng.next() % 4 == 0 { OL } else { 3 };
             if len < ln + 3 { continue; }
             let i = 1 + (rng.next() as usize) % (len - 1 - ln);
             let off = (rng.next() as usize) % 120;
